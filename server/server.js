@@ -7,6 +7,7 @@ const { AdminLogin } = require('./models/adminlogin');
 const { Application } = require('./models/application')
 const { Resume } = require('./models/resume');
 const multer = require('multer');
+const validator = require('validator');
 var jsonParser = bodyParser.json();
 
 var app = express();
@@ -22,8 +23,21 @@ app.use(function (req, res, next) {
 var { mongoose } = require('./db/mongoose');
 
 
+const ValidateLogin = (req) => {
+
+    if (!req.body) {
+
+        throw new Error('Missing required data...');
+    }
+    if (!validator.isEmail(req.body.email)) {
+
+        throw new Error('Invalid Email...');
+    }
+
+}
+
 app.post('/jobportal/posts', jsonParser, (req, res) => {
-    console.log(req.body);
+    // console.log(req.body);
 
 
     var date = new Date();
@@ -46,7 +60,8 @@ app.post('/jobportal/posts', jsonParser, (req, res) => {
 });
 
 app.post('/jobportal/login', jsonParser, (req, res) => {
-    console.log(req.body);
+    //console.log(req.body);
+
 
     var id = '';
 
@@ -72,34 +87,46 @@ app.post('/jobportal/login', jsonParser, (req, res) => {
     //     res.status(400).send();
     // }
 
+    try {
+        const isValid = ValidateLogin(req);
 
-    AdminLogin.findOne({
-        $and: [{
-            email: req.body.email
-        },
-        {
-            password: req.body.password
-        }
-        ]
-    }).then((data) => {
-        // console.log(data);
-        res.send(data.email);
-    }, (e) => {
-        res.status(400).send();
-    }).catch((e) => {
-        res.status(400).send();
-    });
+        AdminLogin.findOne({
+            $and: [{
+                email: req.body.email
+            },
+            {
+                password: req.body.password
+            }
+            ]
+        }).then((data) => {
+            // console.log(data);
+            res.send(data.email);
+        }, (e) => {
+
+            res.status(400).send(e);
+        }).catch((e) => {
+
+            res.status(400).send(e);
+        });
+    }
+    catch (e) {
+        //console.log("inside validator...email3" + e);
+        res.status(400).send( String(e));
+    }
+
 
 
 });
 
 app.post('/jobportal/application', jsonParser, (req, res) => {
-    console.log(req.body);
+    //console.log(req.body);
 
     var application = new Application({
         name: req.body.name,
         email: req.body.email,
         phone: req.body.phone,
+        exp: req.body.exp,
+        skills: req.body.skills,
         _postId: req.body._postId,
         _resumeId: req.body._resumeId
     });
@@ -129,9 +156,9 @@ var upload = multer({ storage: storage });
 
 app.post('/jobportal/fileUpload', upload.single('file'), (req, res, next) => {
 
-    console.log(req.file);
+    //console.log(req.file);
     //console.log('inside file upload....' + req.file);
-    console.log('inside file upload....' + req.file.path);
+    //console.log('inside file upload....' + req.file.path);
 
     // var filepath = String(req.file.path);
 
@@ -175,31 +202,22 @@ app.get('/jobportal', (req, res) => {
 // });
 
 
-app.get('/jobportal/:id', (req, res) => {
-    console.log(req.params);
+app.get('/jobportal/applicants/:id', (req, res) => {
+    // console.log(req.params);
     var id = req.params.id;
     Application.find({ _postId: id }).then((applications) => {
-        var apcount = applications.length;
+        //var apcount = applications.length;
         //res.sendStatus(200).send(count);
-        res.status(200).send({ count: apcount });
+        //res.status(200).send({ count: apcount });
+        res.status(200).send(applications);
     }, (e) => {
         res.status(404).send(e);
     }).catch((e) => {
         res.status(404).send(e);
     });
-    // JobPost.find({ is_deleted: false }).then((posts) => {
 
-    //     res.send(posts);
-    // }, (e) => {
-    //     res.status(404).send(e);
-    // }).catch((e) => {
-    //     res.status(400).send();
-    // });
 });
 
-// Application.find({_postId:_id}).then(()=>{
-
-// });
 app.put('/jobportal/updatepost', jsonParser, (req, res) => {
 
     var date = new Date();
@@ -234,6 +252,25 @@ app.patch('/jobportal/deletepost', jsonParser, (req, res) => {
     }).catch((e) => console.log(e));
 
 });
+
+
+
+// app.get('/jobportal/applicants/:id', (req, res) => {
+//     console.log(req.params);
+//     var id = req.params.id;
+//     Application.find({ _postId: id }).then((applications) => {
+//         var apcount = applications.length;
+//         //res.sendStatus(200).send(count);
+//         res.status(200).send({ count: apcount });
+//     }, (e) => {
+//         res.status(404).send(e);
+//     }).catch((e) => {
+//         res.status(404).send(e);
+//     });
+
+// });
+
+
 app.listen(3000, () => {
     console.log('server up on port 3000...');
 });

@@ -1,19 +1,22 @@
 
 var mongoose = require('mongoose');
-var validator=require('validator');
+var validator = require('validator');
 
 var LoginSchema = new mongoose.Schema({
     email: {
         type: String,
         required: true,
-        validate: {
-            validator: validator.isEmail,
-            message: '{VALUE} is not a valid email'
-        }
+        minlength: 1,
+        trim: true
+        // validate: {
+        //     validator: validator.isEmail,
+        //     message: '{VALUE} is not a valid email'
+        // }
     },
     password: {
         type: String,
-        required: true
+        required: true,
+        minlength: 1,
     }
 
 });
