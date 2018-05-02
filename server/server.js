@@ -8,6 +8,9 @@ const { Application } = require('./models/application')
 const { Resume } = require('./models/resume');
 const multer = require('multer');
 const validator = require('validator');
+const _ = require('lodash');
+var { authenticate } = require('../middleware/authenticate');
+
 var jsonParser = bodyParser.json();
 
 var app = express();
@@ -17,7 +20,9 @@ var app = express();
 app.use(function (req, res, next) {
     res.header('Access-Control-Allow-Origin', '*');
     res.header('Access-Control-Allow-Methods', '*');
-    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept');
+    //res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,DELETE,OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Origin, X-Requested-With, Content-Type, Accept,auth');
+    res.header('Access-Control-Expose-Headers', 'auth');
     next();
 });
 var { mongoose } = require('./db/mongoose');
@@ -36,7 +41,7 @@ const ValidateLogin = (req) => {
 
 }
 
-app.post('/jobportal/posts', jsonParser, (req, res) => {
+app.post('/jobportal/posts', jsonParser, authenticate, (req, res) => {
     // console.log(req.body);
 
 
@@ -59,64 +64,82 @@ app.post('/jobportal/posts', jsonParser, (req, res) => {
 
 });
 
-app.post('/jobportal/login', jsonParser, (req, res) => {
-    //console.log(req.body);
+// app.post('/jobportal/login', jsonParser, (req, res) => {
 
+//     var id = '';
 
-    var id = '';
+//     try {
+//         const isValid = ValidateLogin(req);
 
-    // var adminlogin = new AdminLogin({
-    //     email: req.body.email,
-    //     password: req.body.password
-    // });
+//         AdminLogin.findOne({
+//             $and: [{
+//                 email: req.body.email
+//             },
+//             {
+//                 password: req.body.password
+//             }
+//             ]
+//         }).then((data) => {
+//             // console.log(data);
+//             res.send(data.email);
+//         }, (e) => {
 
-    // adminlogin.save().then((admin) => {
-    //     res.send(admin);
-    // }, (e) => {
-    //     res.status(400).send(e);
-    // });
+//             res.status(400).send(e);
+//         }).catch((e) => {
 
-    // if (req.body.email === 'admin@gmail.com' && req.body.password === 'admin123') {
-    //     // var id = '5acf1edf63b52b1f448c0a33';
+//             res.status(400).send(e);
+//         });
+//     }
+//     catch (e) {
+//         //console.log("inside validator...email3" + e);
+//         res.status(400).send(String(e));
+//     }
 
-    //     res.status(200).send();
+// });
 
-    // }
+//admin creation and header setting
 
-    // else {
-    //     res.status(400).send();
-    // }
+app.post('/jobportal/user', jsonParser, (req, res) => {
+    var body = _.pick(req.body, ['email', 'password']);
+    var user = new AdminLogin(body);
+    user.save().then(() => {
+        return user.generateAuthToken();
 
-    try {
-        const isValid = ValidateLogin(req);
-
-        AdminLogin.findOne({
-            $and: [{
-                email: req.body.email
-            },
-            {
-                password: req.body.password
-            }
-            ]
-        }).then((data) => {
-            // console.log(data);
-            res.send(data.email);
-        }, (e) => {
-
-            res.status(400).send(e);
-        }).catch((e) => {
-
-            res.status(400).send(e);
-        });
-    }
-    catch (e) {
-        //console.log("inside validator...email3" + e);
-        res.status(400).send( String(e));
-    }
-
-
+    }).then((token) => {
+        res.header('auth', token).send(user);
+    }).catch((e) => {
+        console.log(e);
+        res.status(400).send(e);
+    });
 
 });
+
+//admin login
+
+app.post('/jobportal/adminlogin', jsonParser, (req, res) => {
+    // console.log("...in....");
+    try {
+        const isValid = ValidateLogin(req);
+        var body = _.pick(req.body, ['email', 'password']);
+        AdminLogin.findByCredentials(body.email, body.password).then((user) => {
+            return user.generateAuthToken().then((token) => {
+                res.header('auth', token).send(user);
+            }, (err) => {
+                console.log(e);
+            });
+        }).catch((e) => {
+            // console.log(e);
+            res.status(400).send(String(e));
+        });
+
+
+
+    } catch (e) {
+        res.status(400).send(String(e));
+    }
+
+});
+
 
 app.post('/jobportal/application', jsonParser, (req, res) => {
     //console.log(req.body);
@@ -156,7 +179,7 @@ var upload = multer({ storage: storage });
 
 app.post('/jobportal/fileUpload', upload.single('file'), (req, res, next) => {
 
-    //console.log(req.file);
+    // console.log(storage);
     //console.log('inside file upload....' + req.file);
     //console.log('inside file upload....' + req.file.path);
 
@@ -186,19 +209,34 @@ app.get('/jobportal', (req, res) => {
         res.status(400).send();
     });
 });
-// var perpage=6;
+
+app.get('/jobportal/adminHome', authenticate, (req, res) => {
+    JobPost.find({ is_deleted: false }).then((posts) => {
+
+        res.send(posts);
+    }, (e) => {
+        res.status(404).send(e);
+    }).catch((e) => {
+        res.status(400).send();
+    });
+});
+
+
+// var perpage = 10;
 // var page;
 
 // app.get('/jobportal', (req, res) => {
-//     page=req.query.page||1;
+
+//     page = req.query.page || 1;
+//     console.log(page);
 //     JobPost.find().
-//     skip((perpage*page)-perpage)
-//     .limit(perpage)
-//     .then((posts) => {
-//         res.send(posts);
-//     }, (e) => {
-//         res.status(404).send(e);
-//     });
+//         skip((perpage * page) - perpage)
+//         .limit(perpage)
+//         .then((posts) => {
+//             res.send(posts);
+//         }, (e) => {
+//             res.status(404).send(e);
+//         });
 // });
 
 
@@ -218,7 +256,7 @@ app.get('/jobportal/applicants/:id', (req, res) => {
 
 });
 
-app.put('/jobportal/updatepost', jsonParser, (req, res) => {
+app.put('/jobportal/updatepost', jsonParser, authenticate, (req, res) => {
 
     var date = new Date();
     var updatedjobpost = {
@@ -239,7 +277,7 @@ app.put('/jobportal/updatepost', jsonParser, (req, res) => {
 
 });
 
-app.patch('/jobportal/deletepost', jsonParser, (req, res) => {
+app.patch('/jobportal/deletepost', jsonParser, authenticate, (req, res) => {
     var updatedjobpost = {
         is_deleted: true,
         is_Active: false
@@ -269,6 +307,20 @@ app.patch('/jobportal/deletepost', jsonParser, (req, res) => {
 //     });
 
 // });
+
+app.delete('/jobportal/logout', authenticate, (req, res) => {
+
+    // console.log("inside delete..." + req.admin);
+    //var admin=new AdminLogin(req.admin);
+    req.admin.removeToken(req.token).then(() => {
+        res.status(200).send();
+    }, () => {
+        res.status(400).send();
+    });
+
+
+});
+
 
 
 app.listen(3000, () => {
