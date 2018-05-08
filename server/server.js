@@ -10,12 +10,17 @@ const multer = require('multer');
 const validator = require('validator');
 const _ = require('lodash');
 var { authenticate } = require('../middleware/authenticate');
+var csv = require("fast-csv");
+var fs = require('file-system');
 
 var jsonParser = bodyParser.json();
 
 var app = express();
+var baseurl = '/home/experion/Documents/node_works/job-portal-backend';
+var __dirname = '/home/experion/Documents/node_works/job-portal-backend';
 //app.use(bodyParser.json());
 
+//app.use(express.static(__dirname, 'public'));
 
 app.use(function (req, res, next) {
     res.header('Access-Control-Allow-Origin', '*');
@@ -40,6 +45,66 @@ const ValidateLogin = (req) => {
     }
 
 }
+
+
+const ValidateResumeUpload = (req) => {
+
+    if (!req.file) {
+
+        throw new Error('Missing File...');
+    }
+
+    var _validFileExtensions = [".pdf", ".doc", ".docx"];
+
+    let resumefile = req.file.filename;
+
+    if (resumefile.length > 0) {
+        var fileValid = false;
+        for (var j = 0; j < _validFileExtensions.length; j++) {
+            var extension = _validFileExtensions[j];
+            if (resumefile.substr(resumefile.length - extension.length, extension.length).toLowerCase() == extension.toLowerCase()) {
+                fileValid = true;
+                break;
+            }
+        }
+
+        if (!fileValid) {
+            throw new Error('Invalid file type...');
+        }
+
+    }
+
+}
+
+const ValidatePostBulkUpload = (req) => {
+
+    if (!req.file) {
+
+        throw new Error('Missing File...');
+    }
+
+    var _validFileExtensions = [".csv"];
+
+    let jobfile = req.file.filename;
+
+    if (jobfile.length > 0) {
+        var fileValid = false;
+        for (var j = 0; j < _validFileExtensions.length; j++) {
+            var extension = _validFileExtensions[j];
+            if (jobfile.substr(jobfile.length - extension.length, extension.length).toLowerCase() == extension.toLowerCase()) {
+                fileValid = true;
+                break;
+            }
+        }
+
+        if (!fileValid) {
+            throw new Error('Invalid file type...');
+        }
+
+    }
+
+}
+
 
 app.post('/jobportal/posts', jsonParser, authenticate, (req, res) => {
     // console.log(req.body);
@@ -166,7 +231,8 @@ app.post('/jobportal/application', jsonParser, (req, res) => {
 
 var storage = multer.diskStorage({
     destination: (req, file, cb) => {
-        cb(null, '/home/experion/Documents/images/');
+        // cb(null, '/home/experion/Documents/uplodedfiles');
+        cb(null, baseurl + '/uploads');
 
     },
     filename: (req, file, cb) => {
@@ -179,25 +245,109 @@ var upload = multer({ storage: storage });
 
 app.post('/jobportal/fileUpload', upload.single('file'), (req, res, next) => {
 
-    // console.log(storage);
-    //console.log('inside file upload....' + req.file);
-    //console.log('inside file upload....' + req.file.path);
+    var host = 'localhost:3000';
+    const filepath = req.protocol + "://" + host + req.file.path;
+    //console.log(req.file.filename);
+    try {
+        const isValid = ValidateResumeUpload(req);
 
-    // var filepath = String(req.file.path);
+        var resume = new Resume({
+            path: req.file.path
+        });
 
-    var resume = new Resume({
-        path: req.file.path
-    });
+        resume.save().then((file) => {
+            res.send(file);
+        }, (e) => {
+            res.status(400).send(e);
+        }).catch((e) => {
+            res.status(400).send();
+        });
 
-    resume.save().then((file) => {
-        res.send(file);
-    }, (e) => {
-        res.status(400).send(e);
-    }).catch((e) => {
-        res.status(400).send();
-    });
+    } catch (e) {
+        res.status(400).send(String(e));
+    }
 
 });
+
+
+
+app.post('/jobportal/fileUploadPost', upload.single('file'), authenticate, (req, res, next) => {
+    try {
+        const isValid = ValidatePostBulkUpload(req);
+
+        console.log(req.file);
+      
+        var posts = [];
+        var isDataValid = true;
+        //console.log('inside file upload posts....' + req.file.path);
+        var stream = fs.createReadStream(req.file.path);
+
+        csv
+            .fromStream(stream, { headers: true })
+            .on("data", function (data) {
+                // console.log(data);
+
+
+
+                var date = new Date();
+                var jobpost = new JobPost({
+                    title: data.Title,
+                    postedon: date,
+                    postedby: data.PostedFor,
+                    location: data.Location,
+                    description: data.Description,
+                    requirements: data.Requirements,
+                    company: data.Organization
+                });
+                posts.push(jobpost);
+
+                // jobpost.save().then((post) => {
+                //     console.log(post);
+                // }, (e) => {
+                //     console.log(e);
+                //     isDataValid = false;
+                //     res.status(400).send();
+
+                // }).catch((e) => {
+                //     res.status(400).send();
+                // });
+
+
+            })
+            .on("end", function () {
+                console.log("done");
+
+                JobPost.bulkInsert(posts, function (err, results) {
+                    if (err) {
+                        console.log(err);
+                        res.status(400).send();
+                        
+                    } else {
+                        //console.log(results);
+                        res.status(200).send();
+                        
+                    }
+                });
+                // if (isDataValid) {
+                //     res.status(200).send();
+                // }
+                // else {
+                //     res.status(400).send();
+                // }
+
+            });
+
+        //res.status(200).send();
+
+    } catch (e) {
+        res.status(400).send(String(e));
+    }
+
+
+
+
+});
+
 
 app.get('/jobportal', (req, res) => {
     JobPost.find({ is_deleted: false }).then((posts) => {
