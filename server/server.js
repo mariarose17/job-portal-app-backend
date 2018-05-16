@@ -12,7 +12,7 @@ const _ = require('lodash');
 var { authenticate } = require('../middleware/authenticate');
 var csv = require("fast-csv");
 var fs = require('file-system');
-
+var xlsxj = require('xlsx-to-json-lc');
 var jsonParser = bodyParser.json();
 
 var app = express();
@@ -248,6 +248,22 @@ app.post('/jobportal/fileUpload', upload.single('file'), (req, res, next) => {
     var host = 'localhost:3000';
     const filepath = req.protocol + "://" + host + req.file.path;
     //console.log(req.file.filename);
+
+    // xlsxj({
+    //     input: req.file.path,
+    //     output:baseurl + '/uploads/output.json',
+    //     lowerCaseHeaders: true //converts excel header rows into lowercase as json keys
+    // }, function (err, result) {
+    //     if (err) {
+    //         console.error(err);
+    //         res.status(400).send();
+    //     } else {
+    //         console.log(result);
+    //         res.status(200).send();
+    //     }
+    // });
+
+
     try {
         const isValid = ValidateResumeUpload(req);
 
@@ -276,7 +292,7 @@ app.post('/jobportal/fileUploadPost', upload.single('file'), authenticate, (req,
         const isValid = ValidatePostBulkUpload(req);
 
         console.log(req.file);
-      
+
         var posts = [];
         var isDataValid = true;
         //console.log('inside file upload posts....' + req.file.path);
@@ -321,11 +337,11 @@ app.post('/jobportal/fileUploadPost', upload.single('file'), authenticate, (req,
                     if (err) {
                         console.log(err);
                         res.status(400).send();
-                        
+
                     } else {
                         //console.log(results);
                         res.status(200).send();
-                        
+
                     }
                 });
                 // if (isDataValid) {
